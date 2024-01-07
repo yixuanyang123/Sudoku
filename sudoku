@@ -1,0 +1,623 @@
+import random
+import pygame, sys
+
+# default
+WIDTH = 540
+HEIGHT = 600
+LINE_WIDTH = 2
+BOARD_ROWS = 10
+BOARD_COLS = 9
+SQUARE_SIZE = 60
+BG_COLOR = (174, 221, 242)
+RED = (255, 0, 0)
+LINE_COLOR = (0, 0, 0)
+CHIP_COLOR = (171, 176, 172)
+FIXED_CHIP_COLOR = (0, 0, 0)
+GRAY = (168, 168, 168)
+
+
+class SudokuGenerator:
+    def __init__(self, removed_cells, row_length=9):
+        self.row_length = row_length
+        self.removed_cells = removed_cells
+        self.board = [[" " for _ in range(self.row_length)] for _ in range(self.row_length)]
+
+    def get_board(self):
+        return self.board
+
+    def print_board(self):
+        print(self.board)
+
+    def valid_in_row(self, row, num):
+        return num not in self.board[row]
+
+    def valid_in_col(self, col, num):
+        for row in range(self.row_length):
+            if self.board[row][col] == num:
+                return False
+        return True
+
+    def valid_in_box(self, row_start, col_start, num):
+        for row in range(3):
+            for col in range(3):
+                if self.board[row_start + row][col_start + col] == num:
+                    return False
+        return True
+
+    def is_valid(self, row, col, num):
+        return(self.valid_in_row(row,num) and self.valid_in_col(col,num) and self.valid_in_box(row - row%3, col-col%3,num))
+
+    def unused_in_box(self, row_start, col_start, num):
+        for row in range(row_start, row_start+3):
+            for col in range(col_start, col_start+3):
+                if self.board[row][col] == num:
+                    return False
+        return True
+
+    def fill_box(self, row_start, col_start):
+        nums = [i+1 for i in range(self.row_length)]
+        nums = random.sample(nums, len(nums))
+        for i in range(3):
+            for j in range(3):
+                row = row_start + i
+                col = col_start + j
+                for num in nums:
+                    if self.unused_in_box(row_start, col_start, num):
+                        self.board[row][col] = num
+                        nums.remove(num)
+                        break
+
+    def fill_diagonal(self):
+        for i in range(0, self.row_length, 3):
+            self.fill_box(i, i)
+
+    def fill_remaining(self, row, col):
+        if (col >= self.row_length and row < self.row_length - 1):
+            row += 1
+            col = 0
+        if row >= self.row_length and col >= self.row_length:
+            return True
+        if row < 3:
+            if col < 3:
+                col = 3
+        elif row < self.row_length - 3:
+            if col == int(row // 3 * 3):
+                col += 3
+        else:
+            if col == self.row_length - 3:
+                row += 1
+                col = 0
+                if row >= self.row_length:
+                    return True
+        for num in range(1, self.row_length + 1):
+            if self.is_valid(row, col, num):
+                self.board[row][col] = num
+                if self.fill_remaining(row, col + 1):
+                    return True
+                self.board[row][col] = 0
+        return False
+
+    def fill_values(self):
+        self.fill_diagonal()
+        self.fill_remaining(0, 3)
+
+    def remove_cells(self):
+        for i in range(self.removed_cells):
+            row = random.randint(0, self.row_length - 1)
+            col = random.randint(0, self.row_length - 1)
+            while self.board[row][col] == 0:
+                row = random.randint(0, self.row_length - 1)
+                col = random.randint(0, self.row_length - 1)
+            self.board[row][col] = 0
+
+
+def generate_sudoku(removed, size):
+    sudoku = SudokuGenerator(removed, size)
+    sudoku.fill_values()
+    board = sudoku.get_board()
+    sudoku.remove_cells()
+    return board
+
+
+class Cell:
+    def __init__(self, value, row, col, screen):
+        self.value = value
+        self.row = row
+        self.col = col
+        self.screen = screen
+
+        self.sketched_value = value
+        self.selected = False
+
+    def set_cell_value(self, value):
+        self.value = value
+
+    def set_sketched_value(self, value):
+        self.sketched_value = value
+
+    def draw(self):
+        # draw this cell with its value, if cell has no value then no value is display
+        chip_font = pygame.font.Font(None, 60)
+
+        # 1-9 chips
+        chip_1_surf = chip_font.render('1', 1, LINE_COLOR)
+        chip_2_surf = chip_font.render('2', 1, LINE_COLOR)
+        chip_3_surf = chip_font.render('3', 1, LINE_COLOR)
+        chip_4_surf = chip_font.render('4', 1, LINE_COLOR)
+        chip_5_surf = chip_font.render('5', 1, LINE_COLOR)
+        chip_6_surf = chip_font.render('6', 1, LINE_COLOR)
+        chip_7_surf = chip_font.render('7', 1, LINE_COLOR)
+        chip_8_surf = chip_font.render('8', 1, LINE_COLOR)
+        chip_9_surf = chip_font.render('9', 1, LINE_COLOR)
+
+        if self.selected:
+            pygame.draw.rect(screen, RED, pygame.Rect(self.col * SQUARE_SIZE, self.row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
+            self.selected = False
+
+        if self.value == 1:
+            chip_1_rect = chip_1_surf.get_rect(
+                center=(self.col * SQUARE_SIZE + SQUARE_SIZE // 2,
+                        self.row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3))
+            self.screen.blit(chip_1_surf, chip_1_rect)
+        elif self.value == 2:
+            chip_2_rect = chip_2_surf.get_rect(
+                center=(self.col * SQUARE_SIZE + SQUARE_SIZE // 2,
+                        self.row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3))
+            self.screen.blit(chip_2_surf, chip_2_rect)
+        elif self.value == 3:
+            chip_3_rect = chip_3_surf.get_rect(
+                center=(self.col * SQUARE_SIZE + SQUARE_SIZE // 2,
+                        self.row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3))
+            self.screen.blit(chip_3_surf, chip_3_rect)
+        elif self.value == 4:
+            chip_4_rect = chip_4_surf.get_rect(
+                center=(self.col * SQUARE_SIZE + SQUARE_SIZE // 2,
+                        self.row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3))
+            self.screen.blit(chip_4_surf, chip_4_rect)
+        elif self.value == 5:
+            chip_5_rect = chip_5_surf.get_rect(
+                center=(self.col * SQUARE_SIZE + SQUARE_SIZE // 2,
+                        self.row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3))
+            self.screen.blit(chip_5_surf, chip_5_rect)
+        elif self.value == 6:
+            chip_6_rect = chip_6_surf.get_rect(
+                center=(self.col * SQUARE_SIZE + SQUARE_SIZE // 2,
+                        self.row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3))
+            self.screen.blit(chip_6_surf, chip_6_rect)
+        elif self.value == 7:
+            chip_7_rect = chip_7_surf.get_rect(
+                center=(self.col * SQUARE_SIZE + SQUARE_SIZE // 2,
+                        self.row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3))
+            self.screen.blit(chip_7_surf, chip_7_rect)
+        elif self.value == 8:
+            chip_8_rect = chip_8_surf.get_rect(
+                center=(self.col * SQUARE_SIZE + SQUARE_SIZE // 2,
+                        self.row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3))
+            self.screen.blit(chip_8_surf, chip_8_rect)
+        elif self.value == 9:
+            chip_9_rect = chip_9_surf.get_rect(
+                center=(self.col * SQUARE_SIZE + SQUARE_SIZE // 2,
+                        self.row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3))
+            self.screen.blit(chip_9_surf, chip_9_rect)
+        pygame.display.update()
+
+
+class Board:
+    def __init__(self, width, height, screen, difficulty):
+        self.width = width
+        self.height = height
+        self.screen = screen
+        self.difficulty = difficulty
+
+        self.board = generate_sudoku(self.difficulty, 9)
+
+        self.cells = [[Cell(self.board[row][col], row, col, self.screen) for col in range(9)] for row in range(9)]
+
+        self.selected_row = 0
+        self.selected_col = 0
+
+    def draw(self):
+        self.screen.fill(BG_COLOR)
+        button_font = pygame.font.Font(None, 35)
+
+        # draw horizontal line
+        for i in range(1, BOARD_ROWS):
+            pygame.draw.line(self.screen,
+                             LINE_COLOR,
+                             (0, i * SQUARE_SIZE),
+                             (WIDTH, i * SQUARE_SIZE), LINE_WIDTH)
+            pygame.draw.line(self.screen,
+                             LINE_COLOR,
+                             (0, i * SQUARE_SIZE * 3),
+                             (WIDTH, i * SQUARE_SIZE * 3), LINE_WIDTH * 3)
+
+        # draw vertical line
+        for i in range(1, BOARD_COLS):
+            pygame.draw.line(self.screen,
+                             LINE_COLOR,
+                             (i * SQUARE_SIZE, 0),
+                             (SQUARE_SIZE * i, HEIGHT - SQUARE_SIZE), LINE_WIDTH)
+            pygame.draw.line(self.screen,
+                             LINE_COLOR,
+                             (i * SQUARE_SIZE * 3, 0),
+                             (SQUARE_SIZE * i * 3, HEIGHT - SQUARE_SIZE), LINE_WIDTH * 3)
+
+        # draw all the cells based on self.cells list
+        for i in range(9):
+            for j in range(9):
+                self.cells[i][j].set_cell_value(self.board[i][j])
+                self.cells[i][j].draw()
+
+        # bottoms
+        exit_text = button_font.render("EXIT", 0, (255, 255, 255))
+        exit_surface = pygame.Surface((exit_text.get_size()[0] + 20, exit_text.get_size()[1] + 20))
+        exit_surface.fill(LINE_COLOR)
+        exit_surface.blit(exit_text, (10, 10))
+        exit_rectangle = exit_surface.get_rect(
+            center=(WIDTH // 2 + 135, 570))
+        screen.blit(exit_surface, exit_rectangle)
+
+        restart_text = button_font.render("RESTART", 0, (255, 255, 255))
+        restart_surface = pygame.Surface((restart_text.get_size()[0] + 20, restart_text.get_size()[1] + 20))
+        restart_surface.fill(LINE_COLOR)
+        restart_surface.blit(restart_text, (10, 10))
+        restart_rectangle = restart_surface.get_rect(
+            center=(WIDTH // 2, 570))
+        screen.blit(restart_surface, restart_rectangle)
+
+        reset_text = button_font.render("RESET", 0, (255, 255, 255))
+        reset_surface = pygame.Surface((reset_text.get_size()[0] + 20, reset_text.get_size()[1] + 20))
+        reset_surface.fill(LINE_COLOR)
+        reset_surface.blit(reset_text, (10, 10))
+        reset_rectangle = reset_surface.get_rect(
+            center=(WIDTH // 2 - 140, 570))
+        screen.blit(reset_surface, reset_rectangle)
+
+        pygame.display.update()
+
+    def select(self, row, col):
+        # Deselect
+        self.cells[self.selected_row][self.selected_col].selected = True
+
+        # Select the new cell
+        if row in range(9) and col in range(9):
+            self.row = row
+            self.col = col
+        self.cells[self.selected_row][self.selected_col].selected = True
+
+    def click(self, x, y):
+        wcell = self.width // 9
+        hcell = self.height // 9
+        click_row = x // wcell
+        click_col = y // hcell
+        rst = (click_row, click_col)
+        return rst
+
+    def converting(self, su):
+        # this converts sudoku from 2-D 9*9 list to a list with 9 dictionaries
+        # each dictionary represents whether each cell in this line is started in blank
+        # this function should be used when the sudoku is generated
+
+        l_of_dict = []
+        for row in range(9):
+            rowdict = {}
+            for i, val in enumerate(su[row]):  # i is column
+                rowdict[i] = val
+                if val == 0:
+                    rowdict[str(i)] = False  # false means it is a pre-set value
+
+                else:
+                    rowdict[str(i)] = True  # true means it is a player-set value
+
+            l_of_dict.append(rowdict)
+        return l_of_dict
+        # [{1: 2, "1": True,}, {1:0, "1": False}]
+
+    def clear(self, row, col):
+
+        if row in range(9) and col in range(9):  # the location exists
+            if self.converted[row][str(col)]:  # == True
+                self.converted[row][col] = 0  # clear to 0
+
+        else:
+            return None
+
+    def sketch(self, value):
+        self.sketch = value
+
+    def place_number(self, value):
+        self.number = value
+
+    def reset_to_original(self):
+        for i, dict in enumerate(self.converting()):  # i is the index from 0-8
+                                                  # dict is each dictionary contained in the converted sukodu
+            for col in range(9):  # column, each dict have 9 keys
+                if dict[str(col)] == True:  # true = player value
+                    dict[col] = 0  # reset
+
+    def is_full(self):
+        count = 0
+        for row, dict in enumerate(self.converting(self.board)):
+            for col in range(9):
+                if dict[col] == 0:
+                    count += 1
+        if count == 0:
+            return True  # true means the Sudoku is filled
+
+        else:
+            return False  # false means there are 0 in the sudoku so not finished
+
+
+    def update_board(self):
+        for row in range(9):
+            for col in range(9):
+                self.sudoku[row][col] = self.converted[row][col]
+
+    def check_board(self):
+        testset = {1, 2, 3, 4, 5, 6, 7, 8, 9}
+
+        # row check
+        for row in range(9):
+            set1 = set(self.board[row])
+            if set1 != testset:
+                return False
+
+        # column check
+        for col in range(9):
+            collist = []
+            for row in range(9):
+                collist.append(self.board[row][col])
+            set2 = set(collist)
+            if set2 != testset:
+                return False
+
+        # box check
+        for row in range(0, 9, 3):  # 0, 3, 6
+            for col in range(0, 9, 3):  # 0, 3, 6
+                box = [self.board[row][col], self.board[row][col+1], self.board[row][col+2],
+                       self.board[row+1][col], self.board[row+1][col+1], self.board[row+1][col+2],
+                       self.board[row+2][col], self.board[row+2][col+1], self.board[row+2][col+2]]
+                set3 = set(box)
+                if set3 != testset:
+                    return False
+
+        return True
+
+
+def draw_game_start(screen):
+    # Initialize title font
+    start_title_font = pygame.font.Font(None, 70)
+    sub_title_font = pygame.font.Font(None, 55)
+    button_font = pygame.font.Font(None, 40)
+
+    # color background
+    screen.fill(BG_COLOR)
+
+    # Initialize and draw title
+    title_surface = start_title_font.render("Welcome to Sudoku", 1, LINE_COLOR)
+    title_rectangle = title_surface.get_rect(
+        center=(WIDTH // 2, HEIGHT // 2 - 150))
+    screen.blit(title_surface, title_rectangle)
+
+    title_surface = sub_title_font.render("Select Game Mode:", 1, LINE_COLOR)
+    title_rectangle = title_surface.get_rect(
+        center=(WIDTH // 2, HEIGHT // 2))
+    screen.blit(title_surface, title_rectangle)
+
+    # buttons and text first
+    start_easy = button_font.render("EASY", 0, (255, 255, 255))
+    start_medium = button_font.render("MEDIUM", 0, (255, 255, 255))
+    start_hard = button_font.render("HARD", 0, (255, 255, 255))
+
+    # color and text
+    easy_surface = pygame.Surface((start_easy.get_size()[0] + 20, start_easy.get_size()[1] + 20))
+    easy_surface.fill(LINE_COLOR)
+    easy_surface.blit(start_easy, (10, 10))
+    medium_surface = pygame.Surface((start_medium.get_size()[0] + 20, start_medium.get_size()[1] + 20))
+    medium_surface.fill(LINE_COLOR)
+    medium_surface.blit(start_medium, (10, 10))
+    hard_surface = pygame.Surface((start_hard.get_size()[0] + 20, start_hard.get_size()[1] + 20))
+    hard_surface.fill(LINE_COLOR)
+    hard_surface.blit(start_hard, (10, 10))
+
+    # Initialize button rectangle
+    easy_rectangle = start_easy.get_rect(
+        center=(WIDTH // 2 - 120, HEIGHT // 2 + 100))
+    medium_rectangle = start_medium.get_rect(
+        center=(WIDTH // 2, HEIGHT // 2 + 100))
+    hard_rectangle = start_hard.get_rect(
+        center=(WIDTH // 2 + 120, HEIGHT // 2 + 100))
+
+    # Draw buttons
+    screen.blit(start_easy, easy_rectangle)
+    screen.blit(start_medium, medium_rectangle)
+    screen.blit(start_hard, hard_rectangle)
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if easy_rectangle.collidepoint(event.pos):
+                    return 'easy'
+                elif medium_rectangle.collidepoint(event.pos):
+                    return 'medium'
+                elif hard_rectangle.collidepoint(event.pos):
+                    return 'hard'
+        pygame.display.update()
+
+
+def draw_game_over(screen):
+    game_over_font = pygame.font.Font(None, 100)
+    button_font = pygame.font.Font(None, 40)
+    screen.fill(BG_COLOR)
+    if win:
+        text = 'Game Won!'
+    else:
+        text = 'Game Over :('
+
+    game_over_surf = game_over_font.render(text, 0, LINE_COLOR)
+    game_over_rect = game_over_surf.get_rect(
+        center=(WIDTH // 2, HEIGHT // 2 - 100))
+    screen.blit(game_over_surf, game_over_rect)
+
+    if win:
+        exit_text = button_font.render("EXIT", 0, (255, 255, 255))
+        exit_surface = pygame.Surface((exit_text.get_size()[0] + 20, exit_text.get_size()[1] + 20))
+        exit_surface.fill(LINE_COLOR)
+        exit_surface.blit(exit_text, (10, 10))
+        exit_rectangle = exit_surface.get_rect(
+            center=(WIDTH // 2 + 135, 570))
+        screen.blit(exit_surface, exit_rectangle)
+    else:
+        restart_text = button_font.render("RESTART", 0, (255, 255, 255))
+        restart_surface = pygame.Surface((restart_text.get_size()[0] + 20, restart_text.get_size()[1] + 20))
+        restart_surface.fill(LINE_COLOR)
+        restart_surface.blit(restart_text, (10, 10))
+        restart_rectangle = restart_surface.get_rect(
+            center=(WIDTH // 2, 570))
+        screen.blit(restart_surface, restart_rectangle)
+
+
+if __name__ == '__main__':
+    # default
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    screen.fill(BG_COLOR)
+    game_over = False
+    win = False
+
+    # title
+    pygame.init()
+    pygame.display.set_caption('Sudoku')
+
+    chip_font = pygame.font.Font(None, 35)
+    chip_1_surf_1 = chip_font.render('1', 1, GRAY)
+    chip_2_surf_1 = chip_font.render('2', 1, GRAY)
+    chip_3_surf_1 = chip_font.render('3', 1, GRAY)
+    chip_4_surf_1 = chip_font.render('4', 1, GRAY)
+    chip_5_surf_1 = chip_font.render('5', 1, GRAY)
+    chip_6_surf_1 = chip_font.render('6', 1, GRAY)
+    chip_7_surf_1 = chip_font.render('7', 1, GRAY)
+    chip_8_surf_1 = chip_font.render('8', 1, GRAY)
+    chip_9_surf_1 = chip_font.render('9', 1, GRAY)
+
+    # Calls function to draw start screen
+    option = draw_game_start(screen)
+    # difficulty option
+    if option == 'easy':
+        difficulty = 30
+    elif option == 'medium':
+        difficulty = 40
+    elif option == 'hard':
+        difficulty = 50
+
+    board = Board(WIDTH, HEIGHT, screen, difficulty)
+    board.draw()
+    empty = board.converting(board.board)
+
+    # menu
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN and not game_over:
+                clicked_row = int(event.pos[1] / SQUARE_SIZE)
+                clicked_col = int(event.pos[0] / SQUARE_SIZE)
+
+                # clik the cell then ask for a number, then display it on the board
+                if clicked_row == 9 and 1 <= clicked_col <= 2:
+                    for i in range(9):
+                        for j in range(9):
+                            if empty[i][j] == False:
+                                board.board[i][j] = 0
+                    board.draw()
+                if clicked_row == 9 and 3 <= clicked_col <= 5:
+                    board = Board(WIDTH, HEIGHT, screen, difficulty)
+                    empty = board.converting(board.board)
+                    board.draw()
+                if clicked_row == 9 and 6 <= clicked_col <= 7:
+                    sys.exit()
+
+                if 0 <= clicked_row <= 8 and 0 <= clicked_col <= 8:
+                    board.cells[clicked_row][clicked_col].selected = True
+                    board.draw()
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_1:
+                    i = 1
+                    chip_1_rect = chip_1_surf_1.get_rect(
+                        center=(clicked_col * SQUARE_SIZE + SQUARE_SIZE // 2 - 10,
+                                clicked_row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3 - 10))
+                    screen.blit(chip_1_surf_1, chip_1_rect)
+                    pygame.display.update()
+                elif event.key == pygame.K_2:
+                    i = 2
+                    chip_2_rect = chip_2_surf_1.get_rect(
+                        center=(clicked_col * SQUARE_SIZE + SQUARE_SIZE // 2 - 10,
+                                clicked_row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3 - 10))
+                    screen.blit(chip_2_surf_1, chip_2_rect)
+                    pygame.display.update()
+                elif event.key == pygame.K_3:
+                    i = 3
+                    chip_3_rect = chip_3_surf_1.get_rect(
+                        center=(clicked_col * SQUARE_SIZE + SQUARE_SIZE // 2 - 10,
+                                clicked_row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3 - 10))
+                    screen.blit(chip_3_surf_1, chip_3_rect)
+                    pygame.display.update()
+                elif event.key == pygame.K_4:
+                    i = 4
+                    chip_4_rect = chip_4_surf_1.get_rect(
+                        center=(clicked_col * SQUARE_SIZE + SQUARE_SIZE // 2 - 10,
+                                clicked_row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3 - 10))
+                    screen.blit(chip_4_surf_1, chip_4_rect)
+                    pygame.display.update()
+                elif event.key == pygame.K_5:
+                    i = 5
+                    chip_5_rect = chip_5_surf_1.get_rect(
+                        center=(clicked_col * SQUARE_SIZE + SQUARE_SIZE // 2 - 10,
+                                clicked_row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3 - 10))
+                    screen.blit(chip_5_surf_1, chip_5_rect)
+                    pygame.display.update()
+                elif event.key == pygame.K_6:
+                    i = 6
+                    chip_6_rect = chip_6_surf_1.get_rect(
+                        center=(clicked_col * SQUARE_SIZE + SQUARE_SIZE // 2 - 10,
+                                clicked_row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3 - 10))
+                    screen.blit(chip_6_surf_1, chip_6_rect)
+                    pygame.display.update()
+                elif event.key == pygame.K_7:
+                    i = 7
+                    chip_7_rect = chip_7_surf_1.get_rect(
+                        center=(clicked_col * SQUARE_SIZE + SQUARE_SIZE // 2 - 10,
+                                clicked_row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3 - 10))
+                    screen.blit(chip_7_surf_1, chip_7_rect)
+                    pygame.display.update()
+                elif event.key == pygame.K_8:
+                    i = 8
+                    chip_8_rect = chip_8_surf_1.get_rect(
+                        center=(clicked_col * SQUARE_SIZE + SQUARE_SIZE // 2 - 10,
+                                clicked_row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3 - 10))
+                    screen.blit(chip_8_surf_1, chip_8_rect)
+                    pygame.display.update()
+                elif event.key == pygame.K_9:
+                    i = 9
+                    chip_9_rect = chip_9_surf_1.get_rect(
+                        center=(clicked_col * SQUARE_SIZE + SQUARE_SIZE // 2 - 10,
+                                clicked_row * SQUARE_SIZE + SQUARE_SIZE // 2 + 3 - 10))
+                    screen.blit(chip_9_surf_1, chip_9_rect)
+                    pygame.display.update()
+                elif event.key == pygame.K_RETURN:
+                    digit = i
+                    if 0 <= clicked_row <= 8 and 0 <= clicked_col <= 8:
+                        if empty[clicked_row][str(clicked_col)] == False:
+                            board.board[clicked_row][clicked_col] = digit
+                            board.draw()
+
+                if board.is_full():
+                    if board.check_board():
+                        win = True
+                        draw_game_over(screen)
+                        pygame.display.update()
+                    else:
+                        draw_game_over(screen)
+                        pygame.display.update()
